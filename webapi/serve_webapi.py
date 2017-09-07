@@ -45,14 +45,16 @@ def get_metadata():
 @app.route("/",methods=["GET"])
 def run_query():
     corpora=available_corpora.get_corpora(os.path.join(THISDIR,"corpora.yaml"))
-    if "search" not in flask.request.args:
+    if "search" not in flask.request.args and "update" not in flask.request.args:
         return flask.Response(help_response)
+
     retmax=int(flask.request.args.get("retmax",1000)) #default is 1000
     retmax=min(retmax,ABSOLUTE_RETMAX)
 
     extra_args=[]
     if "i" in flask.request.args or flask.request.args.get("case","true").lower()=="false":
         extra_args.append("-i")
+        
     ctx=flask.request.args.get("context",0)
     try:
         ctx=int(ctx)
@@ -74,17 +76,27 @@ def run_query():
         if not c:
             continue
         dbs.extend(c["dbs"])
+
     if "shuffle" in flask.request.args:
         random.shuffle(dbs)
     else:
         dbs=sorted(dbs)
 
     def generate():
-        args=["python","query.py"]+extra_args+["-m",str(retmax),flask.request.args["search"].encode("utf-8"),"--dblist"]+dbs
-        print >> sys.stderr, "Running", args
-        proc=sproc.Popen(args=args,cwd="..",stdout=sproc.PIPE)
-        for line in proc.stdout:
-            yield line
+        print dbs
+        # TODO - Alqui e necessario estabelecer o que vai ser mandado para o modulo de update tambem
+        if "update" in flask.request.args:
+            args=["python","update_sentence.py"]+[flask.request.args["update"].encode("utf-8"),"--dblist"]+dbs
+            print >> sys.stderr, "Running", args            
+            proc=sproc.Popen(args=args,cwd="..",stdout=sproc.PIPE)
+
+        if "search" in flask.request.args:
+            args=["python","query.py"]+extra_args+["-m",str(retmax),flask.request.args["search"].encode("utf-8"),"--dblist"]+dbs
+            print >> sys.stderr, "Running", args            
+            proc=sproc.Popen(args=args,cwd="..",stdout=sproc.PIPE)
+            for line in proc.stdout:
+                yield line
+        
     resp=flask.Response(flask.stream_with_context(generate()),content_type="text/plain; charset=utf-8")
     if "dl" in flask.request.args:
         resp.headers["Content-Disposition"]="attachment; filename=query_result.conllu"
