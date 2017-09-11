@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import flask
 import json
 import sys
@@ -6,6 +7,7 @@ import glob
 import random
 import os.path
 import available_corpora
+import tempfile
 
 DEFAULT_PORT=45678
 
@@ -48,6 +50,17 @@ def run_query():
     if "search" not in flask.request.args and "update" not in flask.request.args:
         return flask.Response(help_response)
 
+    sent_id = None
+
+    if "sent_id" in flask.request.args:
+        sent_id = flask.request.args["sent_id"]
+
+    comments = None
+
+    if "comments" in flask.request.args:
+        comments = flask.request.args["comments"]
+
+
     retmax=int(flask.request.args.get("retmax",1000)) #default is 1000
     retmax=min(retmax,ABSOLUTE_RETMAX)
 
@@ -84,10 +97,45 @@ def run_query():
 
     def generate():
         print dbs
-        # TODO - Alqui e necessario estabelecer o que vai ser mandado para o modulo de update tambem
-        if "update" in flask.request.args:
-            args=["python","update_sentence.py"]+[flask.request.args["update"].encode("utf-8"),"--dblist"]+dbs
-            print >> sys.stderr, "Running", args            
+
+        if "update" in flask.request.args and "sent_id" in flask.request.args:
+            temporary_file = tempfile.NamedTemporaryFile(mode="w+b", suffix=".conllu", prefix="tmp",delete=False)
+
+            print >> sys.stderr,"=======================\n\n"                       
+            print >> sys.stderr, flask.request.args["update"]           
+
+            token_list = json.loads(flask.request.args["update"].encode("utf-8"))
+            comment_list = json.loads(flask.request.args["comments"].encode("utf-8"))
+            #TODO - checar se a estrutura do json está válida, 
+            # adicionar ao readme como deve ser a estrutura do josn dos conllus
+            # criar o /search
+            # averiguar se o id está presente no banco e é inteiro
+
+            for comment in comment_list:                
+                if comment and comment[0]==" ":
+                    temporary_file.write("#"+comment.encode("utf-8")+"\n")
+                else:
+                    temporary_file.write("# "+comment.encode("utf-8")+"\n")
+
+            for token in token_list:
+                temporary_file.write(token["ID"]+"\t")
+                temporary_file.write(token["FORM"]+"\t")
+                temporary_file.write(token["LEMMA"]+"\t")
+                temporary_file.write(token["UPOSTAG"]+"\t")
+                temporary_file.write(token["XPOSTAG"]+"\t")
+                temporary_file.write(token["FEATS"]+"\t")
+                temporary_file.write(token["HEAD"]+"\t")
+                temporary_file.write(token["DEPREL"]+"\t")
+                temporary_file.write(token["DEPS"]+"\t")
+                temporary_file.write(token["MISC"]+"\n")
+
+            temporary_file.write("\n")
+
+            print >> sys.stderr, "Temporary file created: " + temporary_file.name
+            
+            args=["python","update_sentence.py",temporary_file.name,"--sent_id",sent_id,"--dblist"]+dbs
+
+            print >> sys.stderr, "Running", args
             proc=sproc.Popen(args=args,cwd="..",stdout=sproc.PIPE)
 
         if "search" in flask.request.args:
@@ -108,3 +156,4 @@ if __name__=="__main__":
     app.run(host=host, port=DEFAULT_PORT, debug=True, use_reloader=True)
 
 
+    #http://0.0.0.0:45678/?db=Bosque&sent_id=3&update={%22COMMENTS%22:[%22sentence-text:%20Bush%20nominated%20Jennifer%20M.%20Anderson%20for%20a%2015-year%20term%20as%20associate%20judge%20of%20the%20Superior%20Court%20of%20the%20District%20of%20Columbia,%20replacing%20Steffen%20W.%20Graae.%22,%22bbb%22],%20%22TOKENS%22:%20[{%22UPOSTAG%22:%20%22PROPN%22,%20%22LEMMA%22:%20%22PT%22,%20%22HEAD%22:%20%220%22,%20%22DEPREL%22:%20%22root%22,%20%22FORM%22:%20%22PT%22,%20%22XPOSTAG%22:%20%22PROP|M|S|@NPHR%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%221%22,%20%22FEATS%22:%20%22Gender=Masc|Number=Sing%22},%20{%22UPOSTAG%22:%20%22ADP%22,%20%22LEMMA%22:%20%22em%22,%20%22HEAD%22:%20%224%22,%20%22DEPREL%22:%20%22case%22,%20%22FORM%22:%20%22em%22,%20%22XPOSTAG%22:%20%22%3Csam-%3E|PRP|@N%3C%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%222%22,%20%22FEATS%22:%20%22_%22},%20{%22UPOSTAG%22:%20%22DET%22,%20%22LEMMA%22:%20%22o%22,%20%22HEAD%22:%20%224%22,%20%22DEPREL%22:%20%22det%22,%20%22FORM%22:%20%22o%22,%20%22XPOSTAG%22:%20%22%3C-sam%3E|%3Cartd%3E|ART|M|S|@%3EN%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%223%22,%20%22FEATS%22:%20%22Definite=Def|Gender=Masc|Number=Sing|PronType=Art%22},%20{%22UPOSTAG%22:%20%22NOUN%22,%20%22LEMMA%22:%20%22governo%22,%20%22HEAD%22:%20%221%22,%20%22DEPREL%22:%20%22nmod%22,%20%22FORM%22:%20%22governo%22,%20%22XPOSTAG%22:%20%22%3Cnp-def%3E|N|M|S|@P%3C%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%224%22,%20%22FEATS%22:%20%22Gender=Masc|Number=Sing%22}]}

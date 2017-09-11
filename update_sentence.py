@@ -20,6 +20,9 @@ import db_util
 
 ID,FORM,LEMMA,PLEMMA,POS,PPOS,FEAT,PFEAT,HEAD,PHEAD,DEPREL,PDEPREL=range(12)
 
+DEBUG_MODE = True
+
+
 def read_conll(inp,maxsent=0):
     """ Read conll format file and yield one sentence at a time as a list of lists of columns. If inp is a string it will be interpreted as fi
 lename, otherwise as open file for reading in unicode"""
@@ -90,31 +93,21 @@ def skip(items,skip):
             continue
         yield i
 
-def update_sentence(db,sentence_string,sent_id):
-    
-    print "\n\n 1 \n\n"
-    print d
-        
+def update_sentence(db,file,sent_id):
     res_db=sqlite3.connect(unicode(db))
     c = res_db.cursor()
+    src_data=read_conll(file,1)
+    sent_id = int(sent_id)
 
-    #Para ser possível utilizar a função read_conllu da maneira estabelecia, a entrada deve ser um endereço de arquivo ou um arquivo
-    temporaryFileName = ".Tempfile"
-    #os.remove(temporaryFileName)
-    temp_sentence_file = open(temporaryFileName,mode="w")
-    temp_sentence_file.write(sentence_string)
-    temp_sentence_file.close()
-    temp_sentence_file = open(temporaryFileName,mode="r")
-
-    src_data=read_conll(temp_sentence_file,1)
-
-    print sentence_string
+    if DEBUG_MODE:
+        print >> sys.stderr, "----------------\n\n"
+        print >> sys.stderr, open(file,"r").read()
+        print >> sys.stderr, sent_id
 
     for sent_idx,(sent,comments) in enumerate(src_data):
         stats=SymbolStats()
         t=Tree.from_conll(comments,sent,stats)
 
-        print "\n\n 2 \n\n"
         
         # Update sentence registred
         c.execute('UPDATE graph SET token_count=?, conllu_data_compressed=?, conllu_comment_compressed=? WHERE graph_id = ?', [len(sent),buffer(zlib.compress(t.conllu.encode("utf-8"))),buffer(zlib.compress(t.comments.encode("utf-8"))),sent_id ] )
@@ -148,51 +141,51 @@ def update_sentence(db,sentence_string,sent_id):
             gov_set=pytset.PyTSet(len(sent),(idx for idx,s in enumerate(govs) if s))
             dep_set=pytset.PyTSet(len(sent),(idx for idx,s in enumerate(deps) if s))
             try:
-                c.execute('INSERT INTO rel VALUES(?,?,?,?)', [sent_idx,dtype,buffer(serialize_as_tset_array(len(sent),govs)),buffer(serialize_as_tset_array(len(sent),deps))])
+                c.execute('INSERT INTO rel VALUES(?,?,?,?)', [sent_id,dtype,buffer(serialize_as_tset_array(len(sent),govs)),buffer(serialize_as_tset_array(len(sent),deps))])
             except struct.error:
                 for l in sent:
                     print >> sys.stderr, l
                 print >> sys.stderr
 
+
     res_db.commit()
     res_db.close()
-    temp_sentence_file.close()
-    os.remove(temporaryFileName)
     
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Execute a sentence update against the db')
-    parser.add_argument('sentence', nargs=1, help='The sentence to be saved')
+    parser.add_argument('sentence', nargs=1, help='The sentence file to be saved')
     parser.add_argument('-d', '--database', nargs=1, help='Single database or a wildcard of databases to query.')
     parser.add_argument('--dblist', nargs='+', help='A list of databases to query. Note that this argument must be passed as the last to avoid the query term being interpreted as a database name.')
+    parser.add_argument('--sent_id', nargs=1, help='The id in the db of the sentence')
+
     args = parser.parse_args()
  
+    dbs=[]
+
     if args.database:
-        dbs=glob.glob(args.database[0])
+        dbs.append(args.database[0])
         dbs.sort()
 
     elif args.dblist:
         dbs=args.dblist
-
     else:
         print >> sys.stderr, "No database given"
         sys.exit() #no db to search
 
-    print >> sys.stderr, args.sentence[0]
+    #print >> sys.stderr, args.sentence[0]
+    
+    if DEBUG_MODE:
+        print >> sys.stderr, "----------------\n\n"
+        print >> sys.stderr, "dbs: "+str(dbs)
+        print >> sys.stderr, "sent_id: "+str(args.sent_id[0])
+        if args.database:
+            print >> sys.stderr, "database: "+str(args.database[0])
 
-    print >> sys.stderr, dbs
-
+    # TODO - what if the sentence has different ids in  multiple databases? Isn't it better to send tuples [id,db]?
     for d in dbs:
         print >> sys.stderr, d
-        update_sentence(d,args.sentence[0],0)
+        update_sentence(d,args.sentence[0],args.sent_id[0])
 
 #Test:
+#http://0.0.0.0:45678/?db=Bosque&sent_id=3&update=%20[{%22UPOSTAG%22:%20%22PROPN%22,%20%22LEMMA%22:%20%22PT%22,%20%22HEAD%22:%20%220%22,%20%22DEPREL%22:%20%22root%22,%20%22FORM%22:%20%22PT%22,%20%22XPOSTAG%22:%20%22PROP|M|S|@NPHR%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%221%22,%20%22FEATS%22:%20%22Gender=Masc|Number=Sing%22},%20{%22UPOSTAG%22:%20%22ADP%22,%20%22LEMMA%22:%20%22em%22,%20%22HEAD%22:%20%224%22,%20%22DEPREL%22:%20%22case%22,%20%22FORM%22:%20%22em%22,%20%22XPOSTAG%22:%20%22%3Csam-%3E|PRP|@N%3C%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%222%22,%20%22FEATS%22:%20%22_%22},%20{%22UPOSTAG%22:%20%22DET%22,%20%22LEMMA%22:%20%22o%22,%20%22HEAD%22:%20%224%22,%20%22DEPREL%22:%20%22det%22,%20%22FORM%22:%20%22o%22,%20%22XPOSTAG%22:%20%22%3C-sam%3E|%3Cartd%3E|ART|M|S|@%3EN%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%223%22,%20%22FEATS%22:%20%22Definite=Def|Gender=Masc|Number=Sing|PronType=Art%22},%20{%22UPOSTAG%22:%20%22NOUN%22,%20%22LEMMA%22:%20%22governo%22,%20%22HEAD%22:%20%221%22,%20%22DEPREL%22:%20%22nmod%22,%20%22FORM%22:%20%22governo%22,%20%22XPOSTAG%22:%20%22%3Cnp-def%3E|N|M|S|@P%3C%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%224%22,%20%22FEATS%22:%20%22Gender=Masc|Number=Sing%22}]&comments=[1,2,3]
 
-# python update_sentence.py -d bosque_2/trees_00000.db $'#sent_id = CF1-3
-# 1\tViikonlopun\tviikon#loppu\tNOUN\tN\tCase=Gen|Number=Sing\t2\tnmod:poss\t_\t_
-# 2\tpyöritys\tpyöritys\tNOUN\tN\tCase=Nom|Number=Sing\t3\tnsubj\t_\t_
-# 3\talkoi\talkaa\tVERB\tV\tMood=Ind|Number=Sing|Person=3|Tense=Past|VerbForm=Fin|Voice=Act\t0\troot\t_\t_
-# 4\tH&M:n\tH&M\tNOUN\tN\tAbbr=Yes|Case=Gen|Number=Sing\t5\tnsubj\t_\t_
-# 5\tjärjestämällä\tjärjestää\tVERB\tV\tCase=Ade|Degree=Pos|Number=Sing|PartForm=Agt|VerbForm=Part|Voice=Act\t6\tacl\t_\t_
-# 6\tbloggaajabrunssilla\tbloggaaja#brunssi\tNOUN\tN\tCase=Ade|Number=Sing\t3\tnmod\t_\t_
-# 7\tHelsingissä\tHelsinki\tPROPN\tN\tCase=Ine|Number=Sing\t3\tnmod\t_\t_
-# 8\t.\t.\tPUNCT\tPunct\t_\t3\tpunct\t_\t_'
