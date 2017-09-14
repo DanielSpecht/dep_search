@@ -1,3 +1,6 @@
+
+
+
 Requirements
 ============
 
@@ -18,12 +21,13 @@ For Ubuntu, these are available as:
 Installation
 ============
 
+    Delete the setlib folder - It is in the repository for purposes of launching the application via docker
     git clone https://github.com/fginter/dep_search.git   
     cd dep_search
     git submodule init   
     git submodule update   
     make   
-
+   
 Command line usage
 ==================
 
