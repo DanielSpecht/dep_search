@@ -8,6 +8,7 @@ import random
 import os.path
 import available_corpora
 import tempfile
+import urllib
 
 DEFAULT_PORT=45678
 
@@ -104,8 +105,11 @@ def run_query():
             print >> sys.stderr,"=======================\n\n"                       
             print >> sys.stderr, flask.request.args["update"]           
 
-            token_list = json.loads(flask.request.args["update"].encode("utf-8"))
-            comment_list = json.loads(flask.request.args["comments"].encode("utf-8"))
+            token_json_text = urllib.unquote(flask.request.args["update"])
+            comment_json_text = urllib.unquote(flask.request.args["comments"])
+
+            token_list = json.loads(token_json_text.encode("utf-8"))
+            comment_list = json.loads(comment_json_text.encode("utf-8"))
             #TODO - checar se a estrutura do json está válida, 
             # adicionar ao readme como deve ser a estrutura do josn dos conllus
             # criar o /search
