@@ -1,4 +1,4 @@
 bosque_ud:
-  paths: /home/daniel/Repositorios/dep_search/bosque_db/*.db
+  paths: repositories/dep_search/bosque_db/*.db
   name: "Bosque"
 
