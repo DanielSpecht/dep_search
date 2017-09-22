@@ -10,7 +10,7 @@ import available_corpora
 import tempfile
 import urllib
 import os
-
+import traceback
 DEFAULT_PORT=45678
 
 VERBOSE = True
@@ -48,7 +48,7 @@ def get_metadata():
     res={"corpus_groups":corpus_groups}
     return json.dumps(res)
 
-@app.route("/sent",methods=["GET"])
+@app.route("/sentence",methods=["GET"])
 def get_sentence_by_id():
     sent_id = None
     dbs=[]
@@ -61,7 +61,7 @@ def get_sentence_by_id():
             raise Exception("No sentence id recieved")
 
         sent_id = flask.request.args["sent_id"]
-
+        
         # db
         if "db" not in flask.request.args:
             raise Exception("No database specified")
@@ -78,18 +78,23 @@ def get_sentence_by_id():
                 continue
             dbs.extend(c["dbs"])
 
-
-        args=["python","get_sentence.py","--sent_id",sent_id,"--dblist"]+dbs
-
-        if VERBOSE:
-            print >> sys.stderr, "Running", args
-
-        proc=sproc.Popen(args=args,cwd="..",stdout=sproc.PIPE)
-        
+        def generate():
+            args=["python","get_sentence.py",sent_id,"--dblist"]+dbs
+            
+            if VERBOSE:
+                print >> sys.stderr, "Running", args
+            
+            proc=sproc.Popen(args=args,cwd="..",stdout=sproc.PIPE)
+            for line in proc.stdout:
+                yield line
+                
+        resp=flask.Response(flask.stream_with_context(generate()),content_type="text/plain; charset=utf-8")
+        if "dl" in flask.request.args:
+            resp.headers["Content-Disposition"]="attachment; filename=query_result.conllu"
+        return resp
 
     except Exception as e:
         return json.dumps({"sucess":False,"Errors":traceback.format_exc()})
-
 
 @app.route("/update",methods=["GET"])
 def update_sentence():
@@ -222,6 +227,7 @@ def run_query():
         proc=sproc.Popen(args=args,cwd="..",stdout=sproc.PIPE)
         for line in proc.stdout:
             yield line
+
     resp=flask.Response(flask.stream_with_context(generate()),content_type="text/plain; charset=utf-8")
     if "dl" in flask.request.args:
         resp.headers["Content-Disposition"]="attachment; filename=query_result.conllu"
