@@ -20,7 +20,7 @@ import db_util
 
 ID,FORM,LEMMA,PLEMMA,POS,PPOS,FEAT,PFEAT,HEAD,PHEAD,DEPREL,PDEPREL=range(12)
 
-DEBUG_MODE = True
+VERBOSE = False
 
 
 def read_conll(inp,maxsent=0):
@@ -99,7 +99,7 @@ def update_sentence(db,file,sent_id):
     src_data=read_conll(file,1)
     sent_id = int(sent_id)
 
-    if DEBUG_MODE:
+    if VERBOSE:
         print >> sys.stderr, "----------------\n\n"
         print >> sys.stderr, open(file,"r").read()
         print >> sys.stderr, sent_id
@@ -153,7 +153,7 @@ def update_sentence(db,file,sent_id):
     
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Execute a sentence update against the db')
-    parser.add_argument('sentence', nargs=1, help='The sentence file to be saved')
+    parser.add_argument('sentence_file', nargs=1, help='The sentence file to be saved')
     parser.add_argument('-d', '--database', nargs=1, help='Single database or a wildcard of databases to query.')
     parser.add_argument('--dblist', nargs='+', help='A list of databases to query. Note that this argument must be passed as the last to avoid the query term being interpreted as a database name.')
     parser.add_argument('--sent_id', nargs=1, help='The id in the db of the sentence')
@@ -174,7 +174,7 @@ if __name__=="__main__":
 
     #print >> sys.stderr, args.sentence[0]
     
-    if DEBUG_MODE:
+    if VERBOSE:
         print >> sys.stderr, "----------------\n\n"
         print >> sys.stderr, "dbs: "+str(dbs)
         print >> sys.stderr, "sent_id: "+str(args.sent_id[0])
@@ -184,7 +184,7 @@ if __name__=="__main__":
     # TODO - what if the sentence has different ids in  multiple databases? Isn't it better to send tuples [id,db]?
     for d in dbs:
         print >> sys.stderr, d
-        update_sentence(d,args.sentence[0],args.sent_id[0])
+        update_sentence(d,args.sentence_file[0],args.sent_id[0])
 
 #Test:
 #http://0.0.0.0:45678/?db=Bosque&sent_id=3&update=%20[{%22UPOSTAG%22:%20%22PROPN%22,%20%22LEMMA%22:%20%22PT%22,%20%22HEAD%22:%20%220%22,%20%22DEPREL%22:%20%22root%22,%20%22FORM%22:%20%22PT%22,%20%22XPOSTAG%22:%20%22PROP|M|S|@NPHR%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%221%22,%20%22FEATS%22:%20%22Gender=Masc|Number=Sing%22},%20{%22UPOSTAG%22:%20%22ADP%22,%20%22LEMMA%22:%20%22em%22,%20%22HEAD%22:%20%224%22,%20%22DEPREL%22:%20%22case%22,%20%22FORM%22:%20%22em%22,%20%22XPOSTAG%22:%20%22%3Csam-%3E|PRP|@N%3C%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%222%22,%20%22FEATS%22:%20%22_%22},%20{%22UPOSTAG%22:%20%22DET%22,%20%22LEMMA%22:%20%22o%22,%20%22HEAD%22:%20%224%22,%20%22DEPREL%22:%20%22det%22,%20%22FORM%22:%20%22o%22,%20%22XPOSTAG%22:%20%22%3C-sam%3E|%3Cartd%3E|ART|M|S|@%3EN%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%223%22,%20%22FEATS%22:%20%22Definite=Def|Gender=Masc|Number=Sing|PronType=Art%22},%20{%22UPOSTAG%22:%20%22NOUN%22,%20%22LEMMA%22:%20%22governo%22,%20%22HEAD%22:%20%221%22,%20%22DEPREL%22:%20%22nmod%22,%20%22FORM%22:%20%22governo%22,%20%22XPOSTAG%22:%20%22%3Cnp-def%3E|N|M|S|@P%3C%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%224%22,%20%22FEATS%22:%20%22Gender=Masc|Number=Sing%22}]&comments=[1,2,3]
