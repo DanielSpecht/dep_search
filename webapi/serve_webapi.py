@@ -153,16 +153,16 @@ def update_sentence():
                     temporary_file.write("# "+comment.encode("utf-8")+"\n")
 
         for token in token_list:
-            temporary_file.write(token["ID"]+"\t")
-            temporary_file.write(token["FORM"]+"\t")
-            temporary_file.write(token["LEMMA"]+"\t")
-            temporary_file.write(token["UPOSTAG"]+"\t")
-            temporary_file.write(token["XPOSTAG"]+"\t")
-            temporary_file.write(token["FEATS"]+"\t")
-            temporary_file.write(token["HEAD"]+"\t")
-            temporary_file.write(token["DEPREL"]+"\t")
-            temporary_file.write(token["DEPS"]+"\t")
-            temporary_file.write(token["MISC"]+"\n")
+            temporary_file.write(token["ID"].encode("utf-8")+"\t")
+            temporary_file.write(token["FORM"].encode("utf-8")+"\t")
+            temporary_file.write(token["LEMMA"].encode("utf-8")+"\t")
+            temporary_file.write(token["UPOSTAG"].encode("utf-8")+"\t")
+            temporary_file.write(token["XPOSTAG"].encode("utf-8")+"\t")
+            temporary_file.write(token["FEATS"].encode("utf-8")+"\t")
+            temporary_file.write(token["HEAD"].encode("utf-8")+"\t")
+            temporary_file.write(token["DEPREL"].encode("utf-8")+"\t")
+            temporary_file.write(token["DEPS"].encode("utf-8")+"\t")
+            temporary_file.write(token["MISC"].encode("utf-8")+"\n")
 
         temporary_file.write("\n")
         temporary_file.close()
@@ -175,7 +175,7 @@ def update_sentence():
         if VERBOSE:
             print >> sys.stderr, "Running", args
 
-        proc=sproc.Popen(args=args,cwd="..",stdout=sproc.PIPE).wait()
+        proc=sproc.check_call(args=args,cwd="..",stdout=sproc.PIPE)
 
         if VERBOSE:
             print >> sys.stderr, "\n UPDATE SUCESS \n"
