@@ -1,5 +1,5 @@
-
-
+* Search back-end for dependency tree search. See the docs at https://fginter.github.io/dep_search/
+* Take a look at the docker file ( /docker/Dockerfile ) for details on Ubuntu installation.
 
 Requirements
 ============
