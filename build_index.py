@@ -105,8 +105,8 @@ lename, otherwise as open file for reading in unicode"""
             continue
         else:
             cols=line.split(u"\t")
-            if cols[0].isdigit() or u"." in cols[0]:
-                sent.append(cols)
+            #if cols[0].isdigit() or u"." in cols[0]:
+            sent.append(cols)
     else:
         if sent:
             yield sent, comments

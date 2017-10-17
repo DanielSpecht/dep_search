@@ -44,15 +44,15 @@ class Tree(object):
             if u"." in cols[ID]:
                 #nullnode
                 assert cols[ID] not in repl
-                repl[cols[ID]]=unicode(counter)
-                cols[ID]=unicode(counter)
+                repl[cols[ID]]=cols[ID]
+                cols[ID]=cols[ID]
                 if cols[FEAT]==u"_":
                     cols[FEAT]=u"Nullnode=Nullnode"
                 else:
                     cols[FEAT]+=u"|Nullnode=Nullnode"
             else:
-                repl[cols[ID]]=unicode(counter)
-                cols[ID]=unicode(counter)
+                repl[cols[ID]]=cols[ID]
+                cols[ID]=cols[ID]
             newcols.append(cols)
             counter+=1
         for cols in newcols:
