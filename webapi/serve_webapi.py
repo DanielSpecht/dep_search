@@ -18,22 +18,35 @@ VERBOSE = True
 THISDIR=os.path.abspath(os.path.dirname(__file__))
 
 help_response="""\
-<html>
-<body>
 <h1>/</h1>
 <ul>
-   <li>search: the query to run</li>
-   <li>db: corpus,corpus,corpus</li>
-   <li>retmax: max number of results (will be capped at 100K by us)</li>
-   <li>dl: set headers to offer file for download</li>
-   <li>shuffle: randomly shuffle the tree index databases (note: trees still returned in their document order, though!)</li>
-   <li>i or case=False or case=false: case insensitive search</li>
-   <li>context: number of sentences of context to include in the result. Currently capped at 10.</li>
+<li>search: the query to run</li>
+<li>db: corpus,corpus,corpus</li>
+<li>retmax: max number of results (will be capped at 100K by us)</li>
+<li>dl: set headers to offer file for download</li>
+<li>shuffle: randomly shuffle the tree index databases (note: trees still returned in their document order, though!)</li>
+<li>i or case=False or case=false: case insensitive search</li>
+<li>context: number of sentences of context to include in the result. Currently capped at 10.</li>
+<li>c: indicates if the aditional comments are included</li>
 </ul>
 <h1>/metadata</h1>
-Returns a json with the list of available corpora, etc...
-</body>
-</html>
+<p>Returns a JSON with the list of available corpora, etc...</p>
+<h1>/update</h1>
+<p>Updates a sentence in the specified corpus. POST requests only.</p>
+<ul>
+<li>sent_id: The id of the sentence in the database to be updated</li>
+<li>tokens: JSON of the tokens</li>
+<li>comments: JSON of the comments</li>
+<li>db: The db to save</li>
+</ul>
+<h1>/sentence</h1>
+<p>Returns a sentence in JSON format</p>
+<ul>
+<li>sent_id: The id of the sentence in the database to be returned</li>
+<li>db: The db to get the sentence from</li>
+</ul>
+<h1>/metadata</h1>
+<p>Returns a JSON with the list of available corpora, etc...</p>
 """
 
 app = flask.Flask(__name__)
@@ -96,7 +109,7 @@ def get_sentence_by_id():
     except Exception as e:
         return json.dumps({"sucess":False,"Errors":traceback.format_exc()})
 
-@app.route("/update",methods=["GET"])
+@app.route("/update",methods=["POST"])
 def update_sentence():
     sent_id = None
     comments = None
@@ -104,35 +117,36 @@ def update_sentence():
     dbs=[]
 
     temporary_file = tempfile.NamedTemporaryFile(mode="w+b", suffix=".conllu", prefix="tmp",delete=False)
-
+    
     try:
+
         # 1 validate paremeters
 
         # sent_id
-        if "sent_id" not in flask.request.args:
+        if "sent_id" not in flask.request.form:
             raise Exception("No sentence id recieved")
 
-        sent_id = flask.request.args["sent_id"]
+        sent_id = flask.request.form["sent_id"]
 
         # comments
-        if "comments" not in flask.request.args:
+        if "comments" not in flask.request.form:
             raise Exception("No sentence comments recieved")
 
-        comment_list = json.loads(urllib.unquote(flask.request.args["comments"]).encode("utf-8"))
+        comment_list = json.loads(urllib.unquote(flask.request.form["comments"]).encode('latin1').decode('utf8'))
 
         # tokens
         token_list = None
-        if "tokens" not in flask.request.args:
+        if "tokens" not in flask.request.form:
             raise Exception("No sentence tokens sent")
 
-        token_list = json.loads(urllib.unquote(flask.request.args["tokens"]).encode("utf-8"))
+        token_list = json.loads(urllib.unquote(flask.request.form["tokens"]).encode('latin1').decode('utf8'))
 
         # db
-        if "db" not in flask.request.args:
+        if "db" not in flask.request.form:
             raise Exception("No database specified")
 
         corpora=available_corpora.get_corpora(os.path.join(THISDIR,"corpora.yaml"))
-        for corpus in flask.request.args.get("db","").split(","):
+        for corpus in flask.request.form.get("db","").split(","):
             c=corpora.get(corpus) #corpus should be the ID
             if not c: #not found? maybe it's the name!
                 for some_c in corpora.itervalues():
@@ -147,10 +161,7 @@ def update_sentence():
         for c in comment_list:
             comment = unicode(c)
             if comment:
-                if comment[0]  is " ":
-                    temporary_file.write("#"+comment.encode("utf-8")+"\n")
-                else:
-                    temporary_file.write("# "+comment.encode("utf-8")+"\n")
+                temporary_file.write("#"+comment.encode("utf-8")+"\n")
 
         for token in token_list:
             temporary_file.write(token["ID"].encode("utf-8")+"\t")
@@ -203,7 +214,12 @@ def run_query():
     extra_args=[]
     if "i" in flask.request.args or flask.request.args.get("case","true").lower()=="false":
         extra_args.append("-i")
+
+    if "c" in flask.request.args or flask.request.args.get("case","true").lower()=="false":
+        extra_args.append("-c")
+
     ctx=flask.request.args.get("context",0)
+
     try:
         ctx=int(ctx)
     except ValueError:

@@ -107,12 +107,15 @@ def get_url(comments):
     return None
 
 def print_sent(r,idx,res_db,args):
-    print "# graph id:",idx
+    if not clean_flag:
+        print "# graph id:",idx
+    
     hit,hit_comment=get_data_from_db(res_db,idx)
     hit_lines=hit.splitlines()
     for x in sorted(r):
-        print "# visual-style\t%s\tbgColor:lightgreen"%(hit_lines[x].split("\t",1)[0])
-        print "# hittoken:\t"+hit_lines[x]
+        if not clean_flag:
+            print "# visual-style\t%s\tbgColor:lightgreen"%(hit_lines[x].split("\t",1)[0])
+            print "# hittoken:\t"+hit_lines[x]
     if hit_comment:
         print hit_comment
     if args.context>0:
@@ -127,12 +130,14 @@ def print_sent(r,idx,res_db,args):
                 if data is None or get_url(data_comment.decode("utf-8"))!=hit_url:
                     continue
             text=u" ".join(t.split(u"\t",2)[1] for t in data.decode(u"utf-8").split(u"\n"))
-            if i<idx:
-                texts.append(u"# context-before: "+text)
-            elif i==idx:
-                texts.append(u"# context-hit: "+text)
-            else:
-                texts.append(u"# context-after: "+text)
+
+            if not clean_flag:
+                if i<idx:
+                    texts.append(u"# context-before: "+text)
+                elif i==idx:
+                    texts.append(u"# context-hit: "+text)
+                else:
+                    texts.append(u"# context-after: "+text)
         print (u"\n".join(text for text in texts)).encode(u"utf-8")
     print hit
     print
@@ -156,9 +161,9 @@ def query_from_db(q_obj,db_name,sql_query,sql_args,args,hit_counter):
                 print_sent(current_set,current_idx,res_db,args)
                 hit_counter+=1
             break
-
-        print "# db-name:",db_name
-        print "# graph id:",idx
+        if not clean_flag:
+            print "# db-name:",db_name
+            print "# graph id:",idx
         if idx!=current_idx and current_set: #We have a new sentence, finish the old one!
             print_sent(current_set,current_idx,res_db,args)
             current_set=set()
@@ -179,6 +184,7 @@ def query_from_db(q_obj,db_name,sql_query,sql_args,args,hit_counter):
     
 def main(argv):
     global query_obj
+    global clean_flag
 
     parser = argparse.ArgumentParser(description='Execute a query against the db')
     parser.add_argument('-m', '--max', type=int, default=500, help='Max number of results to return. 0 for all. Default: %(default)d.')
@@ -189,9 +195,15 @@ def main(argv):
     parser.add_argument('--context', required=False, action="store", default=0, type=int, metavar='N', help='Print the context (+/- N sentences) as comment. Default: %(default)d.')
     parser.add_argument('--keep-query', required=False, action='store_true',default=False, help='Do not delete the compiled query after completing the search.')
     parser.add_argument('search', nargs=1, help='The name of the search to run (without .pyx), or a query expression.')
+    parser.add_argument('-c', '--clean', default=False, action="store_true", help='Does not inform which tokens were hit the query specification.')
 
     args = parser.parse_args(argv[1:])
 
+    print >> sys.stderr, "\n\n\ aaa \n\n\n"
+    print >> sys.stderr, args.clean
+
+    clean_flag = args.clean
+    
     if args.output is not None:
         sys.stdout = open(args.output, 'w')
 
