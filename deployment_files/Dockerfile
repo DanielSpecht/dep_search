@@ -26,6 +26,7 @@ RUN pip install uwsgi
 RUN pip install Flask
 RUN pip install pyyaml
 RUN pip install requests
+RUN pip install python-swiftclient
 
 RUN mkdir repositories
 

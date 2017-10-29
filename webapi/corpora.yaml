@@ -1,4 +1,3 @@
 bosque_ud:
-  paths: /root/repositories/dep_search/bosque_db/*.db
+  paths: /data/bosque-db/*.db
   name: "Bosque"
-

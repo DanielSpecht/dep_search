@@ -12,7 +12,7 @@ import urllib
 import os
 import traceback
 import swiftclient
-import keystoneclient.v3 as keystoneclient
+#import keystoneclient.v3 as keystoneclient
 import time
 import threading
 import datetime
@@ -59,7 +59,7 @@ help_response="""\
 
 app = flask.Flask(__name__)
 
-DB_CONLLU_FILE="bosque.conllu"
+DB_CONLLU_FILE="/data/bosque-db/bosque.conllu"
 ABSOLUTE_RETMAX=100000
 MAXCONTEXT=10
 
@@ -281,14 +281,17 @@ def getConnection():
 # BACKUP
 
 def backupCheck():
+    minutes = 10
     while True:
-            time.sleep(5)
+        
+            time.sleep(60*minutes)
             print >> sys.stderr,"Checking changes in database."
             global LAST_BACKUP
             global LAST_UPDATE
-            print LAST_BACKUP
-            print LAST_UPDATE
-            print LAST_BACKUP<LAST_UPDATE
+            if VERBOSE:
+                print LAST_BACKUP
+                print LAST_UPDATE
+                print LAST_BACKUP<LAST_UPDATE
             if LAST_BACKUP < LAST_UPDATE:
                 print >> sys.stderr,"Changes detected on database"
                 backupDB()
@@ -311,12 +314,11 @@ def backupDB():
             continue
 
 def createDBCopy():
-    myurl = "".join(["http://localhost:",str(DEFAULT_PORT),"/?search=_","&db=Bosque","&c","retmax=",str(ABSOLUTE_RETMAX)])
+    myurl = "".join(["http://localhost:",str(DEFAULT_PORT),"/?search=_","&db=Bosque","&c","&retmax=",str(ABSOLUTE_RETMAX)])
     response = urllib.urlopen(myurl)  
     fileContents = response.read()
     with open(DB_CONLLU_FILE,"w") as DBfile:
         DBfile.write(fileContents)
-
 
 def sendDBCopy():
     print "Sending file conll-u file"
@@ -324,7 +326,7 @@ def sendDBCopy():
     containerName = "bosque-UD"
     with open(DB_CONLLU_FILE, 'r') as DBfile:
         conn.put_object(containerName,
-        DB_CONLLU_FILE,
+        os.path.basename(DB_CONLLU_FILE),
         contents= DBfile.read())
 
 # Get The DB
@@ -337,7 +339,7 @@ def getConlluDBFile():
 
             conn = getConnection()
             # Download an object and save it
-            obj = conn.get_object("bosque-UD", DB_CONLLU_FILE)
+            obj = conn.get_object("bosque-UD", os.path.basename(DB_CONLLU_FILE))
             with open(DB_CONLLU_FILE, 'w') as DBfile:
                 DBfile.write(obj[1])
 
@@ -358,7 +360,7 @@ def buildDB():
             if VERBOSE:
                 print >> sys.stderr, "Building database from file."
                 
-            command = ["cat",DB_CONLLU_FILE,"|","python","../build_index.py","--wipe","-d","../bosque_db"]
+            command = ["cat",DB_CONLLU_FILE,"|","python","../build_index.py","--wipe","-d",os.path.dirname(DB_CONLLU_FILE)]
             os.system(" ".join(command))
             break
         except:
