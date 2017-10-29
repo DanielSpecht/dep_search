@@ -11,7 +11,15 @@ import tempfile
 import urllib
 import os
 import traceback
-DEFAULT_PORT=45678
+import swiftclient
+import keystoneclient.v3 as keystoneclient
+import time
+import threading
+import datetime
+
+DEFAULT_PORT = 45678
+LAST_BACKUP = None
+LAST_UPDATE = None
 
 VERBOSE = True
 
@@ -51,6 +59,7 @@ help_response="""\
 
 app = flask.Flask(__name__)
 
+DB_CONLLU_FILE="bosque.conllu"
 ABSOLUTE_RETMAX=100000
 MAXCONTEXT=10
 
@@ -190,6 +199,9 @@ def update_sentence():
 
         if VERBOSE:
             print >> sys.stderr, "\n UPDATE SUCESS \n"
+        
+        global LAST_UPDATE
+        LAST_UPDATE = datetime.datetime.now()
 
         return json.dumps({"sucess":True})
     
@@ -257,10 +269,129 @@ def run_query():
         resp.headers["Content-Disposition"]="attachment; filename=query_result.conllu"
     return resp
 
+def getConnection():
+    credentials = json.loads(os.environ['OBJECT_STORAGE_CREDENTIALS'].replace("'",'"'))
+    return swiftclient.Connection(key=credentials['password'],
+                                authurl=credentials['auth_url']+"/v3",
+                                auth_version='3',
+                                os_options={"project_id": credentials['projectId'],
+                                            "user_id": credentials['userId'],
+                                            "region_name": credentials['region']})
+
+# BACKUP
+
+def backupCheck():
+    while True:
+            time.sleep(5)
+            print >> sys.stderr,"Checking changes in database."
+            global LAST_BACKUP
+            global LAST_UPDATE
+            print LAST_BACKUP
+            print LAST_UPDATE
+            print LAST_BACKUP<LAST_UPDATE
+            if LAST_BACKUP < LAST_UPDATE:
+                print >> sys.stderr,"Changes detected on database"
+                backupDB()
+
+def backupDB():
+    while True:
+        try:
+            print >> sys.stderr, "Backing up the DB."
+            createDBCopy()
+            sendDBCopy()
+            global LAST_BACKUP
+            LAST_BACKUP = datetime.datetime.now()
+
+            break
+        except:
+            print >> sys.stderr,"Error backing up the DB:"
+            print >> sys.stderr,traceback.format_exc()
+            print >> sys.stderr,"Trying backing up the DB again..."
+            time.sleep(5)
+            continue
+
+def createDBCopy():
+    myurl = "".join(["http://localhost:",str(DEFAULT_PORT),"/?search=_","&db=Bosque","&c","retmax=",str(ABSOLUTE_RETMAX)])
+    response = urllib.urlopen(myurl)  
+    fileContents = response.read()
+    with open(DB_CONLLU_FILE,"w") as DBfile:
+        DBfile.write(fileContents)
+
+
+def sendDBCopy():
+    print "Sending file conll-u file"
+    conn = getConnection()
+    containerName = "bosque-UD"
+    with open(DB_CONLLU_FILE, 'r') as DBfile:
+        conn.put_object(containerName,
+        DB_CONLLU_FILE,
+        contents= DBfile.read())
+
+# Get The DB
+
+def getConlluDBFile():
+    while True:
+        try:
+            if VERBOSE:
+                print >> sys.stderr , "Getting the conllu file for the DB."
+
+            conn = getConnection()
+            # Download an object and save it
+            obj = conn.get_object("bosque-UD", DB_CONLLU_FILE)
+            with open(DB_CONLLU_FILE, 'w') as DBfile:
+                DBfile.write(obj[1])
+
+            if VERBOSE:
+                print >> sys.stderr, "Database file %s downloaded successfully." % (DB_CONLLU_FILE)
+            break
+
+        except:
+            print >> sys.stderr,"Error getting DB file:"
+            print >> sys.stderr,traceback.format_exc()
+            print >> sys.stderr, "Trying getting the DB again..."
+            time.sleep(5)
+            continue
+
+def buildDB():
+    while True:
+        try:
+            if VERBOSE:
+                print >> sys.stderr, "Building database from file."
+                
+            command = ["cat",DB_CONLLU_FILE,"|","python","../build_index.py","--wipe","-d","../bosque_db"]
+            os.system(" ".join(command))
+            break
+        except:
+            print >> sys.stderr,"Error building the DB file:"
+            print >> sys.stderr,traceback.format_exc()
+            print >> sys.stderr, "Trying building the DB again..."            
+            time.sleep(5)
+            continue
+
+def getDB():
+    getConlluDBFile()
+    buildDB()
+
 if __name__=="__main__":
-    #DEFAULT_PORT set at the top of this file, defaults to 45678
-    host='0.0.0.0'
-    app.run(host=host, port=DEFAULT_PORT, debug=True, use_reloader=True)
+    try:
+        #DEFAULT_PORT set at the top of this file, defaults to 45678
+        host='0.0.0.0'
+
+        global LAST_BACKUP
+        global LAST_UPDATE
+
+        date = datetime.datetime.now()
+        LAST_BACKUP = date
+        LAST_UPDATE = date
+
+        getDB()
+        threading.Thread(target=backupCheck, args=()).start()
+
+        app.run(host=host, port=DEFAULT_PORT, debug=False, use_reloader=False)
+    except:
+        print >> sys.stderr,"Error starting the system:"
+        print >> sys.stderr,traceback.format_exc()
+
 
 #http://0.0.0.0:45678/update
 # ?db=Bosque

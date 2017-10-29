@@ -1,0 +1,60 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dep-search-pod
+  labels:
+    app: dep-search-app
+spec:
+  containers:
+    - name: dep-search
+      image: danielssmenezes/dep_search
+      env:
+      - name: OBJECT_STORAGE_CREDENTIALS
+        value: "secret"
+      volumeMounts:
+      - name: bosque-db
+        mountPath: /data/bosque-db
+      #ports:
+      #  - containerPort: 80
+  volumes:
+  - name: bosque-db
+    emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dep-search-service
+spec:
+  type: NodePort
+  selector:
+    app: dep-search-app
+  ports:
+  - protocol: TCP
+    port: 45678
+    targetPort: 45678
+    nodePort: 30200
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: dep-search
+spec:
+  replicas: 1
+  template:
+    metadata:
+      name: dep-search-pod
+      labels:
+        app: dep-search-app
+    spec:
+      containers:
+        - name: dep-search
+          image: danielssmenezes/dep_search
+          volumeMounts:
+          - name: bosque-db
+            mountPath: /data/bosque-db
+          #ports:
+          #  - containerPort: 80
+      volumes:
+      - name: bosque-db
+        emptyDir: {}
