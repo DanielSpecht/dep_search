@@ -12,7 +12,7 @@ import urllib
 import os
 import traceback
 import swiftclient
-#import keystoneclient.v3 as keystoneclient
+import keystoneclient.v3 as keystoneclient
 import time
 import threading
 import datetime
