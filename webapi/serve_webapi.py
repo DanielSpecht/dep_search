@@ -58,7 +58,7 @@ help_response="""\
 """
 
 app = flask.Flask(__name__)
-
+DB_FILE = "/data/bosque-db/trees_00000.db"
 DB_CONLLU_FILE="/data/bosque-db/bosque.conllu"
 ABSOLUTE_RETMAX=100000
 MAXCONTEXT=10
@@ -336,7 +336,8 @@ def getConlluDBFile():
         while True:
             try:
                 if VERBOSE:
-                    print >> sys.stderr , "Getting the conllu file for the DB."
+                    print >> sys.stderr , "Conllu file not found."
+                    print >> sys.stderr , " Getting the conllu file for the DB."
 
                 conn = getConnection()
                 # Download an object and save it
@@ -354,6 +355,10 @@ def getConlluDBFile():
                 print >> sys.stderr, "Trying getting the DB again..."
                 time.sleep(5)
                 continue
+    else:
+        if VERBOSE:
+            print >> sys.stderr, "Conllu file found."
+
 
 def buildDB():
     while True:
@@ -372,8 +377,18 @@ def buildDB():
             continue
 
 def getDB():
-    getConlluDBFile()
-    buildDB()
+    if not os.path.isfile(DB_FILE):
+        if VERBOSE:
+            print >> sys.stderr, "No database found."
+            print >> sys.stderr, "Building database..."
+
+        getConlluDBFile()
+        buildDB()
+    else:
+        if VERBOSE:
+            print >> sys.stderr, "Database found."
+
+    
 
 if __name__=="__main__":
     try:
