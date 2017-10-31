@@ -281,7 +281,7 @@ def getConnection():
 # BACKUP
 
 def backupCheck():
-    minutes = 10
+    minutes = 5
     while True:
         
             time.sleep(60*minutes)
@@ -332,22 +332,22 @@ def sendDBCopy():
 # Get The DB
 
 def getConlluDBFile():
-    if os.path.isfile(DB_CONLLU_FILE):
+    if not os.path.isfile(DB_CONLLU_FILE):
         while True:
             try:
                 if VERBOSE:
                     print >> sys.stderr , "Getting the conllu file for the DB."
-    
+
                 conn = getConnection()
                 # Download an object and save it
                 obj = conn.get_object("bosque-UD", os.path.basename(DB_CONLLU_FILE))
                 with open(DB_CONLLU_FILE, 'w') as DBfile:
                     DBfile.write(obj[1])
-    
+
                 if VERBOSE:
                     print >> sys.stderr, "Database file %s downloaded successfully." % (DB_CONLLU_FILE)
                 break
-    
+
             except:
                 print >> sys.stderr,"Error getting DB file:"
                 print >> sys.stderr,traceback.format_exc()
