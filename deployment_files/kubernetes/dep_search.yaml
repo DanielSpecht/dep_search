@@ -8,10 +8,10 @@ metadata:
 spec:
   containers:
     - name: dep-search
-      image: danielssmenezes/dep_search
+      image: image
       env:
       - name: OBJECT_STORAGE_CREDENTIALS
-        value: "secret"
+        value: "credentials"
       volumeMounts:
       - name: bosque-db
         mountPath: /data/bosque-db
@@ -33,14 +33,14 @@ spec:
   - protocol: TCP
     port: 45678
     targetPort: 45678
-    nodePort: 30200
+    nodePort: 30001
 ---
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
   name: dep-search
 spec:
-  replicas: 1
+  replicas: 0
   template:
     metadata:
       name: dep-search-pod
@@ -49,7 +49,10 @@ spec:
     spec:
       containers:
         - name: dep-search
-          image: danielssmenezes/dep_search
+          image: image
+          env:
+          - name: OBJECT_STORAGE_CREDENTIALS
+            value: "credentials"
           volumeMounts:
           - name: bosque-db
             mountPath: /data/bosque-db
