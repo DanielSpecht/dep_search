@@ -16,6 +16,8 @@ import keystoneclient.v3 as keystoneclient
 import time
 import threading
 import datetime
+import csv
+import hashlib, uuid
 
 DEFAULT_PORT = 45678
 LAST_BACKUP = None
@@ -58,8 +60,10 @@ help_response="""\
 """
 
 app = flask.Flask(__name__)
-DB_FILE = "/data/bosque-db/trees_00000.db"
-DB_CONLLU_FILE="/data/bosque-db/bosque.conllu"
+DB_FILE = "bosque_db/trees_00000.db"
+DB_CONLLU_FILE="bosque_db/bosque.conllu"
+VOLUME_PATH = "bosque_db"
+
 ABSOLUTE_RETMAX=100000
 MAXCONTEXT=10
 
@@ -124,12 +128,11 @@ def update_sentence():
     comments = None
     sentence = None
     dbs=[]
-
+    
     temporary_file = tempfile.NamedTemporaryFile(mode="w+b", suffix=".conllu", prefix="tmp",delete=False)
     
     try:
-
-        # 1 validate paremeters
+        print flask.request.form
 
         # sent_id
         if "sent_id" not in flask.request.form:
@@ -388,13 +391,176 @@ def getDB():
         if VERBOSE:
             print >> sys.stderr, "Database found."
 
+# ACCESS CONTROL
+
+@app.route("/adduserss",methods=["POST"])
+def add_user():
+    try:
+        # admin password
+        if "adminPassword" not in flask.request.form:
+            raise Exception("No password recieved")
+        
+        adminPassword = urllib.unquote(flask.request.form["adminPassword"]).encode('latin1').decode('utf8')
+
+        # password
+        if "password" not in flask.request.form:
+            raise Exception("No password recieved")
+
+        password = urllib.unquote(flask.request.form["password"]).encode('latin1').decode('utf8')
+        hashedPassword = hashPassword(password)
+
+        # user
+        if "user" not in flask.request.form:
+            raise Exception("No user recieved")
+
+        user = urllib.unquote(flask.request.form["user"]).encode('latin1').decode('utf8')
+
+        authenticateAdmin(adminPassword)
+
+        addUser(user,password)
+
+        return json.dumps({"sucess":True})
+
+    except Exception as e:
+        print >> sys.stderr, traceback.format_exc()
+        return json.dumps({"sucess":False,"Errors":traceback.format_exc()})
+
+@app.route("/removeuser",methods=["POST"])
+def remove_user():
+    try:
+        # admin password
+        if "adminPassword" not in flask.request.form:
+            raise Exception("No password recieved")
+        
+        adminPassword = urllib.unquote(flask.request.form["adminPassword"]).encode('latin1').decode('utf8')
+
+        # password
+        if "password" not in flask.request.form:
+            raise Exception("No password recieved")
+
+        password = urllib.unquote(flask.request.form["password"]).encode('latin1').decode('utf8')
+        hashedPassword = hashPassword(password)
+
+        # user
+        if "user" not in flask.request.form:
+            raise Exception("No user recieved")
+
+        user = urllib.unquote(flask.request.form["user"]).encode('latin1').decode('utf8')
+
+        authenticateAdmin(adminPassword)
+
+        removeUser(user,password)
+
+        return json.dumps({"sucess":True})
+
+    except Exception as e:
+        print >> sys.stderr, traceback.format_exc()
+        return json.dumps({"sucess":False,"Errors":traceback.format_exc()})
+
+@app.route("/users",methods=["POST"])
+def get_users():
+    try:
+        # admin password
+        if "adminPassword" not in flask.request.form:
+            raise Exception("No password recieved")
+        
+        adminPassword = urllib.unquote(flask.request.form["adminPassword"]).encode('latin1').decode('utf8')
+        authenticateAdmin(adminPassword)
+        return getUsers()
+
+    except Exception as e:
+        print >> sys.stderr, traceback.format_exc()
+        return json.dumps({"sucess":False,"Errors":traceback.format_exc()})
+
+def hashPassword(password):    
+    #salt = uuid.uuid4().hex
+    #return hashlib.sha512(password + salt).hexdigest()
+    return hashlib.sha512(password).hexdigest()
+
+def authenticate(user,password):
+    if not any( (user['userName'] == userName) and (user['password'] == userName) for user in users):
+        raise Exception("No user found")
+
+def authenticateAdmin(password):
+    print password
+    print type(password)
+    print os.environ['ADMIN_CREDENTIALS']
+    print type(password)
+
+    #AdminAuthorization
+    if os.environ['ADMIN_CREDENTIALS'] != password:
+        raise Exception("Access denied")
+
+def addUser(userName,password):
+
+    hashedPassword = hashPassword(password)
+    users = None
+    usersFilePath = os.path.join(VOLUME_PATH,"users")
     
+    # Get users
+    with open(usersFilePath, 'r') as usersFile:
+        users = json.loads(usersFile.read())
+    
+    if any(user['userName'] == userName for user in users):
+        for i in range(len(users)):
+            if users[i]["userName"] == userName:
+                users[i]["password"] = hashedPassword
+                
+    else:
+        users.append({"userName":userName,"password":hashedPassword})
+
+    # Save users
+    with open(usersFilePath, 'w') as usersFile:
+        usersFile.write(json.dumps(users))
+
+def removeUser(userName,password):
+    users = None
+    usersFilePath = os.path.join(VOLUME_PATH,"users")
+    
+    # Get users
+    with open(usersFilePath, 'r') as usersFile:
+        users = json.loads(usersFile.read())
+
+    # if user exists
+    if any(user['userName'] == userName for user in users):
+        for i in range(len(users)):
+            if users[i]["userName"] == userName:
+                users.pop(i)
+                break
+    
+        # Save users
+        with open(usersFilePath, 'w') as usersFile:
+            usersFile.write(json.dumps(users))
+
+    else:
+        raise Exception("User specified for deletion not found")
+
+def getUsers():
+    users = None
+    usersFilePath = os.path.join(VOLUME_PATH,"users")
+    
+    # Get users
+    with open(usersFilePath, 'r') as usersFile:
+        users = json.loads(usersFile.read())
+
+    for i in range(len(users)):
+        users[i]=users[i]["userName"]
+
+    return "\n".join(users)
+
+def createUsersIfFileDoesntExist(filePath):
+    if not os.path.isfile(filePath):
+        if VERBOSE:
+            print >>sys.stderr, "No users file found"
+        with open(filePath, 'a') as file:
+            file.write(json.dumps([]))
+    else:
+        if VERBOSE:
+            print >> sys.stderr, "Users file found"
 
 if __name__=="__main__":
     try:
-        #DEFAULT_PORT set at the top of this file, defaults to 45678
-        host='0.0.0.0'
-
+        # Backup startup
         global LAST_BACKUP
         global LAST_UPDATE
 
@@ -403,15 +569,21 @@ if __name__=="__main__":
         LAST_UPDATE = date
 
         getDB()
-        threading.Thread(target=backupCheck, args=()).start()
+        #threading.Thread(target=backupCheck, args=()).start()
+
+        # Create file for users storage
+        createUsersIfFileDoesntExist(os.path.join(VOLUME_PATH,"users"))
+
+        # System startup
+        #DEFAULT_PORT set at the top of this file, defaults to 45678
+        host='0.0.0.0'
 
         app.run(host=host, port=DEFAULT_PORT, debug=False, use_reloader=False)
+
     except:
         print >> sys.stderr,"Error starting the system:"
         print >> sys.stderr,traceback.format_exc()
 
-
-#http://0.0.0.0:45678/update
-# ?db=Bosque
-# &sent_id=3
-# &comments=[%22sentence-text:%20Bush%20nominated%20Jennifer%20M.%20Anderson%20for%20a%2015-year%20term%20as%20associate%20judge%20of%20the%20Superior%20Court%20of%20the%20District%20of%20Columbia,%20replacing%20Steffen%20W.%20Graae.%22,%22bbb%22]&tokens=[{%22UPOSTAG%22:%20%22PROPN%22,%20%22LEMMA%22:%20%22PT%22,%20%22HEAD%22:%20%220%22,%20%22DEPREL%22:%20%22root%22,%20%22FORM%22:%20%22PT%22,%20%22XPOSTAG%22:%20%22PROP|M|S|@NPHR%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%221%22,%20%22FEATS%22:%20%22Gender=Masc|Number=Sing%22},%20{%22UPOSTAG%22:%20%22ADP%22,%20%22LEMMA%22:%20%22em%22,%20%22HEAD%22:%20%224%22,%20%22DEPREL%22:%20%22case%22,%20%22FORM%22:%20%22em%22,%20%22XPOSTAG%22:%20%22%3Csam-%3E|PRP|@N%3C%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%222%22,%20%22FEATS%22:%20%22_%22},%20{%22UPOSTAG%22:%20%22DET%22,%20%22LEMMA%22:%20%22o%22,%20%22HEAD%22:%20%224%22,%20%22DEPREL%22:%20%22det%22,%20%22FORM%22:%20%22o%22,%20%22XPOSTAG%22:%20%22%3C-sam%3E|%3Cartd%3E|ART|M|S|@%3EN%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%223%22,%20%22FEATS%22:%20%22Definite=Def|Gender=Masc|Number=Sing|PronType=Art%22},%20{%22UPOSTAG%22:%20%22NOUN%22,%20%22LEMMA%22:%20%22governo%22,%20%22HEAD%22:%20%221%22,%20%22DEPREL%22:%20%22nmod%22,%20%22FORM%22:%20%22governo%22,%20%22XPOSTAG%22:%20%22%3Cnp-def%3E|N|M|S|@P%3C%22,%20%22DEPS%22:%20%22_%22,%20%22MISC%22:%20%22_%22,%20%22ID%22:%20%224%22,%20%22FEATS%22:%20%22Gender=Masc|Number=Sing%22}]
+#curl -d "adminPassword=123&password=password&user=user" -X POST http://localhost:45678/adduser
+#curl -d "adminPassword=123&password=password&user=user" -X POST http://localhost:45678/removeuser
+#curl -d "adminPassword=123&password=password&user=user" -X POST http://localhost:45678/users
