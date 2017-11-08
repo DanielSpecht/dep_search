@@ -132,7 +132,21 @@ def update_sentence():
     temporary_file = tempfile.NamedTemporaryFile(mode="w+b", suffix=".conllu", prefix="tmp",delete=False)
     
     try:
-        print flask.request.form
+        # password
+        if "password" not in flask.request.form:
+            raise Exception("No password recieved")
+
+        password = urllib.unquote(flask.request.form["password"]).encode('latin1').decode('utf8')
+        hashedPassword = hashPassword(password)
+
+        # username
+        if "username" not in flask.request.form:
+            raise Exception("No user recieved")
+
+        username = urllib.unquote(flask.request.form["username"]).encode('latin1').decode('utf8')
+
+        # auth user...
+        authenticate(username,password)
 
         # sent_id
         if "sent_id" not in flask.request.form:
@@ -393,7 +407,7 @@ def getDB():
 
 # ACCESS CONTROL
 
-@app.route("/adduserss",methods=["POST"])
+@app.route("/adduser",methods=["POST"])
 def add_user():
     try:
         # admin password
@@ -477,15 +491,28 @@ def hashPassword(password):
     #return hashlib.sha512(password + salt).hexdigest()
     return hashlib.sha512(password).hexdigest()
 
-def authenticate(user,password):
-    if not any( (user['userName'] == userName) and (user['password'] == userName) for user in users):
-        raise Exception("No user found")
+def authenticate(userName,password):
+    users = None
+    usersFilePath = os.path.join(VOLUME_PATH,"users")
+
+    # Get users
+    with open(usersFilePath, 'r') as usersFile:
+        users = json.loads(usersFile.read())
+    print users
+
+    hashedPassword = hashPassword(password)
+
+    for user in users:
+        if user['userName'] == userName and user['password'] == hashedPassword:
+            if VERBOSE:
+                print >> sys.stderr, "User %s authenticated"%userName
+            return
+
+    raise Exception("User %s not found"%userName)
+
+
 
 def authenticateAdmin(password):
-    print password
-    print type(password)
-    print os.environ['ADMIN_CREDENTIALS']
-    print type(password)
 
     #AdminAuthorization
     if os.environ['ADMIN_CREDENTIALS'] != password:
@@ -546,7 +573,7 @@ def getUsers():
     for i in range(len(users)):
         users[i]=users[i]["userName"]
 
-    return "\n".join(users)
+    return "\n".join(users)+"\n"
 
 def createUsersIfFileDoesntExist(filePath):
     if not os.path.isfile(filePath):
