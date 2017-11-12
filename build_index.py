@@ -56,7 +56,7 @@ def prepare_tables(conn):
     for q in build.split(";"):        
         q=q.strip()
         if q:
-            print q
+            #print q
             conn.execute(q)
     conn.commit()
 
@@ -73,7 +73,7 @@ def build_indices(conn):
     """
     for q in build.split(";"):
         if q.strip():
-            print q
+            #print q
             conn.execute(q)
     conn.commit()
 
