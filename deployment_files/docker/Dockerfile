@@ -31,8 +31,11 @@ RUN pip install python-swiftclient
 
 RUN mkdir repositories
 
+# Not made by git clone
+ADD dep_search/ repositories/dep_search/
+
 CMD cd repositories/ \
-    &&git clone https://github.com/DanielSpecht/dep_search.git \
+    # &&git clone https://github.com/DanielSpecht/dep_search.git \
     &&cd dep_search/ \
     && make \
     &&cd webapi/ \

@@ -133,7 +133,7 @@ def update_sentence():
     comments = None
     sentence = None
     dbs=[]
-
+    
     temporary_file = tempfile.NamedTemporaryFile(mode="w+b", suffix=".conllu", prefix="tmp",delete=False)
 
     try:
@@ -418,7 +418,6 @@ def add_user():
         # admin password
         if "adminPassword" not in flask.request.form:
             raise Exception("No password recieved")
-
         adminPassword = urllib.unquote(flask.request.form["adminPassword"]).encode('latin1').decode('utf8')
 
         # password
@@ -450,7 +449,6 @@ def remove_user():
         # admin password
         if "adminPassword" not in flask.request.form:
             raise Exception("No password recieved")
-
         adminPassword = urllib.unquote(flask.request.form["adminPassword"]).encode('latin1').decode('utf8')
 
         # password
@@ -482,7 +480,6 @@ def get_users():
         # admin password
         if "adminPassword" not in flask.request.form:
             raise Exception("No password recieved")
-
         adminPassword = urllib.unquote(flask.request.form["adminPassword"]).encode('latin1').decode('utf8')
         authenticateAdmin(adminPassword)
         return getUsers()
@@ -535,7 +532,6 @@ def addUser(userName,password):
         for i in range(len(users)):
             if users[i]["userName"] == userName:
                 users[i]["password"] = hashedPassword
-
     else:
         users.append({"userName":userName,"password":hashedPassword})
 
