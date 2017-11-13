@@ -137,21 +137,21 @@ def update_sentence():
     temporary_file = tempfile.NamedTemporaryFile(mode="w+b", suffix=".conllu", prefix="tmp",delete=False)
 
     try:
-        # # password
-        # if "password" not in flask.request.form:
-        #     raise Exception("No password recieved")
+        # password
+        if "password" not in flask.request.form:
+            raise Exception("No password recieved")
 
-        # password = urllib.unquote(flask.request.form["password"]).encode('latin1').decode('utf8')
-        # hashedPassword = hashPassword(password)
+        password = urllib.unquote(flask.request.form["password"]).encode('latin1').decode('utf8')
+        hashedPassword = hashPassword(password)
 
-        # # username
-        # if "username" not in flask.request.form:
-        #     raise Exception("No user recieved")
+        # username
+        if "username" not in flask.request.form:
+            raise Exception("No user recieved")
 
-        # username = urllib.unquote(flask.request.form["username"]).encode('latin1').decode('utf8')
+        username = urllib.unquote(flask.request.form["username"]).encode('latin1').decode('utf8')
 
-        # # auth user...
-        # authenticate(username,password)
+        # auth user...
+        authenticate(username,password)
 
         # sent_id
         if "sent_id" not in flask.request.form:
@@ -218,6 +218,11 @@ def update_sentence():
             print >> sys.stderr, "Running", args
 
         proc=sproc.check_call(args=args,cwd="..",stdout=sproc.PIPE)
+
+        global dbManager
+        print "--------------------<<"
+        print dbs
+        dbManager.flagChangedDb(dbs)
 
         if VERBOSE:
             print >> sys.stderr, "\n UPDATE SUCESS \n"
@@ -307,7 +312,7 @@ def backupCheck():
     while True:
 
         time.sleep(60*minutes)
-        print >> sys.stderr,"Checking changes in database."
+        print >> sys.stderr,"Checking for changes in database."
         global LAST_BACKUP
         global LAST_UPDATE
         if VERBOSE:
@@ -620,30 +625,47 @@ class DatabaseBackupManager():
         self._downloadConlluFiles()
         self._mountDatabases()
         self._configureApplication()
+        self._startBackUpCheckLoop()
+
+    def flagChangedDb(self,dbs):
+        databases = [database for database in self.databases if database.dbFilePath in dbs]
+
+        for database in databases:
+            if self.verbose:
+                print >> sys.stderr, "\n  \n"
+
+            database.flagUpdate()
 
     def _startBackUpCheckLoop(self):
+        threading.Thread(target=self._backupCheckLoop, args=()).start()
+
+    def _backupCheckLoop(self):
         while True:
             time.sleep(self.backupCheckTime)
             self._backupCheck()
 
     def _backupCheck(self):
         if self.verbose:
-            print >> sys.stderr,"\nChecking changes in databases\n"
+            print >> sys.stderr,"\nChecking for changes in databases"
 
         for database in self.databases:
             if database.needsBackup():
                 
                 if self.verbose:
-                    print >> sys.stderr,"\Changes detected in %s database\n"%(database.dbName)
+                    print >> sys.stderr,"\t - Changes detected in %s database\n"%(database.dbName)
                 
                 self._backupDB(database)
 
+            elif self.verbose:
+                print >> sys.stderr,"\t - No changes in %s database\n"%(database.dbName)
+                
     def _backupDB(self,database):
         if self.verbose:
             print >> sys.stderr, "\nBacking up the database %s.\n"%(database.dbName)
         
         self._updateConlluFileFromDB(database)
-        self.storageManager.backupFile(database.conlluFilePath,self.containerName,database.conlluFileName)
+        self.storageManager.backupFile(database.conlluFilePath,self.containerName,database.conlluFileName+".zip")
+        database.flagBackup()
 
     def _updateConlluFileFromDB(self,database):
         while True:
@@ -666,8 +688,6 @@ class DatabaseBackupManager():
                     print >> sys.stderr, traceback.format_exc()
                     time.sleep(10)
                 continue
-
-
 
     def _configureApplication(self):
         if self.verbose:
@@ -757,6 +777,12 @@ class dep_search_database():
         now = datetime.datetime.now()
         self.lastBackup = now
         self.lastUpdate = now
+
+    def flagBackup(self):
+        self.lastBackup = datetime.datetime.now()
+
+    def flagUpdate(self):
+        self.lastUpdate = datetime.datetime.now()
 
     def isDownloaded(self):
         return os.path.isfile(self.conlluFilePath)
@@ -874,7 +900,8 @@ if __name__=="__main__":
 
         manager = ObjectStorageManager(credentials,True)
 
-        dbManager = DatabaseBackupManager(volumeDir=VOLUME_PATH,objectStoragecredentials=credentials, verbose=True)
+        global dbManager
+        dbManager = DatabaseBackupManager(volumeDir=VOLUME_PATH,objectStoragecredentials=credentials, verbose=True,backupCheckTime = 15 )
         dbManager.startUp()
 
         # fileName = "testfile.txt"
@@ -883,7 +910,6 @@ if __name__=="__main__":
 
         # manager.backupFile(os.path.join(VOLUME_PATH,fileName),"bosque-UD",fileName)
         # manager.getFile(os.path.join(VOLUME_PATH,fileName),"bosque-UD",fileName)
-
 
         #exit(0)
 
@@ -894,9 +920,6 @@ if __name__=="__main__":
         date = datetime.datetime.now()
         LAST_BACKUP = date
         LAST_UPDATE = date
-
-        #getDB()
-        #threading.Thread(target=backupCheck, args=()).start()
 
         # Create file for users storage
         createUsersIfFileDoesntExist(os.path.join(VOLUME_PATH,"users"))
