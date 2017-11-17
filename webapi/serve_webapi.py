@@ -21,6 +21,7 @@ import hashlib, uuid
 import re
 import gzip
 import shutil
+from dateutil.parser import parse
 
 DEFAULT_PORT = 45678
 LAST_BACKUP = None
@@ -137,21 +138,21 @@ def update_sentence():
     temporary_file = tempfile.NamedTemporaryFile(mode="w+b", suffix=".conllu", prefix="tmp",delete=False)
 
     try:
-        # password
-        if "password" not in flask.request.form:
-            raise Exception("No password recieved")
+        # # password
+        # if "password" not in flask.request.form:
+        #     raise Exception("No password recieved")
 
-        password = urllib.unquote(flask.request.form["password"]).encode('latin1').decode('utf8')
-        hashedPassword = hashPassword(password)
+        # password = urllib.unquote(flask.request.form["password"]).encode('latin1').decode('utf8')
+        # hashedPassword = hashPassword(password)
 
-        # username
-        if "username" not in flask.request.form:
-            raise Exception("No user recieved")
+        # # username
+        # if "username" not in flask.request.form:
+        #     raise Exception("No user recieved")
 
-        username = urllib.unquote(flask.request.form["username"]).encode('latin1').decode('utf8')
+        # username = urllib.unquote(flask.request.form["username"]).encode('latin1').decode('utf8')
 
-        # auth user...
-        authenticate(username,password)
+        # # auth user...
+        # authenticate(username,password)
 
         # sent_id
         if "sent_id" not in flask.request.form:
@@ -225,7 +226,7 @@ def update_sentence():
         dbManager.flagChangedDb(dbs)
 
         if VERBOSE:
-            print >> sys.stderr, "\n UPDATE SUCESS \n"
+            print >> sys.stderr, "Update success\n"
 
         global LAST_UPDATE
         LAST_UPDATE = datetime.datetime.now()
@@ -304,116 +305,6 @@ def getConnection():
                                 os_options={"project_id": credentials['projectId'],
                                             "user_id": credentials['userId'],
                                             "region_name": credentials['region']})
-
-# BACKUP
-
-def backupCheck():
-    minutes = 5
-    while True:
-
-        time.sleep(60*minutes)
-        print >> sys.stderr,"Checking for changes in database."
-        global LAST_BACKUP
-        global LAST_UPDATE
-        if VERBOSE:
-            print LAST_BACKUP
-            print LAST_UPDATE
-            print LAST_BACKUP<LAST_UPDATE
-        if LAST_BACKUP < LAST_UPDATE:
-            print >> sys.stderr,"Changes detected on database"
-            backupDB()
-
-def backupDB():
-    while True:
-        try:
-            print >> sys.stderr, "Backing up the DB."
-            createDBCopy()
-            sendDBCopy()
-            global LAST_BACKUP
-            LAST_BACKUP = datetime.datetime.now()
-
-            break
-        except:
-            print >> sys.stderr,"Error backing up the DB:"
-            print >> sys.stderr,traceback.format_exc()
-            print >> sys.stderr,"Trying backing up the DB again..."
-            time.sleep(5)
-            continue
-
-def createDBCopy():
-    myurl = "".join(["http://localhost:",str(DEFAULT_PORT),"/?search=_","&db=Bosque","&c","&retmax=",str(ABSOLUTE_RETMAX)])
-    response = urllib.urlopen(myurl)
-    fileContents = response.read()
-    with open(DB_CONLLU_FILE,"w") as DBfile:
-        DBfile.write(fileContents)
-
-def sendDBCopy():
-    print "Sending file conll-u file"
-    conn = getConnection()
-    containerName = "bosque-UD"
-    with open(DB_CONLLU_FILE, 'r') as DBfile:
-        conn.put_object(containerName,
-        os.path.basename(DB_CONLLU_FILE),
-        contents= DBfile.read())
-
-# Get The DB
-
-def getConlluDBFile():
-    if not os.path.isfile(DB_CONLLU_FILE):
-        while True:
-            try:
-                if VERBOSE:
-                    print >> sys.stderr , "Conllu file not found."
-                    print >> sys.stderr , " Getting the conllu file for the DB."
-
-                conn = getConnection()
-                # Download an object and save it
-                obj = conn.get_object("bosque-UD", os.path.basename(DB_CONLLU_FILE))
-                with open(DB_CONLLU_FILE, 'w') as DBfile:
-                    DBfile.write(obj[1])
-
-                if VERBOSE:
-                    print >> sys.stderr, "Database file %s downloaded successfully." % (DB_CONLLU_FILE)
-                break
-
-            except:
-                print >> sys.stderr,"Error getting DB file:"
-                print >> sys.stderr,traceback.format_exc()
-                print >> sys.stderr, "Trying getting the DB again..."
-                time.sleep(5)
-                continue
-    else:
-        if VERBOSE:
-            print >> sys.stderr, "Conllu file found."
-
-
-def buildDB():
-    while True:
-        try:
-            if VERBOSE:
-                print >> sys.stderr, "Building database from file."
-
-            command = ["cat",DB_CONLLU_FILE,"|","python","../build_index.py","--wipe","-d",os.path.dirname(DB_CONLLU_FILE)]
-            os.system(" ".join(command))
-            break
-        except:
-            print >> sys.stderr,"Error building the DB file:"
-            print >> sys.stderr,traceback.format_exc()
-            print >> sys.stderr, "Trying building the DB again..."
-            time.sleep(5)
-            continue
-
-def getDB():
-    if not os.path.isfile(DB_FILE):
-        if VERBOSE:
-            print >> sys.stderr, "No database found."
-            print >> sys.stderr, "Building database..."
-
-        getConlluDBFile()
-        buildDB()
-    else:
-        if VERBOSE:
-            print >> sys.stderr, "Database found."
 
 # ACCESS CONTROL
 
@@ -598,10 +489,16 @@ class DatabaseBackupManager():
                  objectStoragecredentials,
                  backupCheckTime = 15*60,
                  containerName = "bosque-UD",
-                 VolumeConlluFilesFolder = "conllu_files",
-                 VolumeDBMountFolder="databases",
+                 volumeConlluFilesFolder = "conllu_files",
+                 volumeDBMountFolder="databases",
+                 versionSeparator="_",
+                 compressedExtension = ".zip",
                  verbose=False):
-        
+
+        self.versionSeparator = versionSeparator
+
+        self.compressedExtension = compressedExtension
+
         self.databases = []
 
         self.backupCheckTime = backupCheckTime
@@ -612,11 +509,11 @@ class DatabaseBackupManager():
 
         self.verbose = verbose
 
-        self.dbMountFolder = os.path.join(volumeDir,VolumeDBMountFolder)
+        self.dbMountFolder = os.path.join(volumeDir,volumeDBMountFolder)
         if not os.path.exists(self.dbMountFolder):
             os.makedirs(self.dbMountFolder)
 
-        self.conlluFilesFolder = os.path.join(volumeDir,VolumeConlluFilesFolder)
+        self.conlluFilesFolder = os.path.join(volumeDir,volumeConlluFilesFolder)
         if not os.path.exists(self.conlluFilesFolder):
             os.makedirs(self.conlluFilesFolder)
 
@@ -632,7 +529,7 @@ class DatabaseBackupManager():
 
         for database in databases:
             if self.verbose:
-                print >> sys.stderr, "\n  \n"
+                print >> sys.stderr, "\nDatabase %s changed.\n"%database.dbName
 
             database.flagUpdate()
 
@@ -646,32 +543,35 @@ class DatabaseBackupManager():
 
     def _backupCheck(self):
         if self.verbose:
-            print >> sys.stderr,"\nChecking for changes in databases"
+            print >> sys.stderr,"Checking for changes in databases"
 
         for database in self.databases:
             if database.needsBackup():
                 
                 if self.verbose:
-                    print >> sys.stderr,"\t - Changes detected in %s database\n"%(database.dbName)
+                    print >> sys.stderr,"\t - Changes detected in %s database"%(database.dbName)
                 
                 self._backupDB(database)
 
             elif self.verbose:
-                print >> sys.stderr,"\t - No changes in %s database\n"%(database.dbName)
+                print >> sys.stderr,"\t - No changes in %s database"%(database.dbName)
+
+        if self.verbose: # Format line
+            print >> sys.stderr,""  
                 
     def _backupDB(self,database):
         if self.verbose:
-            print >> sys.stderr, "\nBacking up the database %s.\n"%(database.dbName)
+            print >> sys.stderr, "Backing up the database %s.\n"%(database.dbName)
         
         self._updateConlluFileFromDB(database)
-        self.storageManager.backupFile(database.conlluFilePath,self.containerName,database.conlluFileName+".zip")
+        self.storageManager.backupFile(database.conlluFilePath,self.containerName,database.conlluFileName)
         database.flagBackup()
 
     def _updateConlluFileFromDB(self,database):
         while True:
             try:
                 if self.verbose:
-                    print >> sys.stderr, "\n Updating file %s.\n"%(database.dbName)
+                    print >> sys.stderr, "Updating file %s.\n"%(database.dbName)
 
                 # Gets a conllu file with all the sentences of the database
                 myurl = "".join(["http://localhost:",str(DEFAULT_PORT),"/?search=_","&db=",database.prefix,"&c","&retmax=",str(ABSOLUTE_RETMAX)])
@@ -680,18 +580,18 @@ class DatabaseBackupManager():
 
                 with open(database.conlluFilePath,"w") as conlluFile:
                     conlluFile.write(fileContents)
-
                 break
+
             except:
                 if self.verbose:
-                    print >> sys.stderr, "\n Error Updating file %s. Trying again.\n"%(database.dbName)
+                    print >> sys.stderr, "Error Updating file %s. Trying again.\n"%(database.dbName)
                     print >> sys.stderr, traceback.format_exc()
                     time.sleep(10)
                 continue
 
     def _configureApplication(self):
         if self.verbose:
-            print >> sys.stderr,"\n Creating configuration file corpora.yaml.\n"
+            print >> sys.stderr,"Creating configuration file corpora.yaml.\n"
 
         with open("corpora.yaml","w") as corpora:
             for database in self.databases:
@@ -702,7 +602,7 @@ class DatabaseBackupManager():
                 corpora.writelines(lines)
 
         if self.verbose:
-            print >> sys.stderr,"\n Creating configuration file corpus_groups.yaml.\n"
+            print >> sys.stderr,"Creating configuration file corpus_groups.yaml.\n"
 
         with open("corpus_groups.yaml","w") as corpus_groups:
             lines = ["-\n",
@@ -718,58 +618,56 @@ class DatabaseBackupManager():
                 self._mountDatabase(database)
             else:
                 if self.verbose:
-                    print >> sys.stderr,"\n Database %s already mounted. Skipping.\n"%(database.dbName)
+                    print >> sys.stderr,"Database %s already mounted. Skipping.\n"%(database.dbName)
 
         for unmountedDatabase in [database for database in self.databases if not database.isMounted()]:
             self._mountDatabase(unmountedDatabase)
 
     def _defineDatabases(self):
         fileNames = self.storageManager.getFileNamesOfContainer(self.containerName)
-        dbsFileNames = [fileName for fileName in fileNames if re.match(".*\.conllu.zip",fileName)]
+        databaseFilePattern = ".+%s$"%("\.conllu")
+        dbsFileNames = [fileName for fileName in fileNames if re.match(databaseFilePattern,fileName)]
 
         if self.verbose:
-            print >> sys.stderr,"\nFound %s files for building databases:\n"%(len(dbsFileNames))
+            print >> sys.stderr,"Found %s files for building databases:"%(len(dbsFileNames))
             
             for fileName in dbsFileNames:
-                print >> sys.stderr,"\t - %s\n"%(fileName) 
+                print >> sys.stderr,"\t - %s"%(fileName) 
+
+            print >> sys.stderr,"" # Format line
 
         # Get the files from the repository
         for dbName in dbsFileNames:
-            # Remove the ".zip" in the end i.e. file.conllu.zip -> file.conllu
-            conllufileName = os.path.splitext(dbName)[0]
-            conlluFilePath = os.path.join(self.conlluFilesFolder,conllufileName)
+            conlluFilePath = os.path.join(self.conlluFilesFolder,dbName)
             self.databases.append(dep_search_database(conlluFilePath,self.dbMountFolder))
 
     def _downloadConlluFiles(self):
         # Get the files from the repository
         for database in self.databases:
             if not database.isDownloaded():
-                self.storageManager.getFile(database.conlluFilePath,self.containerName,database.objectStorageFileName)
+                self.storageManager.getFile(database.conlluFilePath,self.containerName,database.conlluFileName)
             else:
-                print >> sys.stderr,"\n File %s already downloaded. Skipping.\n"%(database.conlluFileName)
+                print >> sys.stderr,"File %s already downloaded. Skipping.\n"%(database.conlluFileName)
 
     def _mountDatabase(self,database):
 
         if VERBOSE:
-            print >> sys.stderr, "\nBuilding database from file %s\n"%(database.conlluFilePath)
+            print >> sys.stderr, "Building database from file %s\n"%(database.conlluFilePath)
 
         command = ["cat",database.conlluFilePath,"|","python","../build_index.py","--wipe","-d",database.directory,"--prefix",database.prefix]
 
         os.system(" ".join(command))
 
         if VERBOSE:
-            print >> sys.stderr, "\nBuild complete\n"
+            print >> sys.stderr, "Build complete\n"
 
 class dep_search_database():
     def __init__(self,conlluFilePath, databasesDirectory):
 
         self.conlluFilePath = conlluFilePath # i.e. a/b/file.conllu
-        self.conlluFileName = os.path.basename(self.conlluFilePath) # i.e. file.conllu
-        self.prefix = os.path.splitext(self.conlluFileName)[0] # i.e. file
-
-        self.objectStorageFileName = self.conlluFileName+".zip"
-
-
+        self.conlluFileName = os.path.basename(self.conlluFilePath) # i.e. file.conllu, a/b/file.conllu -> file.conllu
+        self.prefix = os.path.splitext(self.conlluFileName)[0] # i.e. file, file.conllu -> file
+        
         self.dbName = self.prefix+"_00000.db"
         self.directory = os.path.join(databasesDirectory, self.prefix)
         self.dbFilePath = os.path.join(self.directory, self.dbName)
@@ -794,9 +692,13 @@ class dep_search_database():
         return self.lastBackup < self.lastUpdate
 
 class ObjectStorageManager:
-    def __init__(self, credentials, verbose=False):
+    def __init__(self, credentials, verbose=False,maxVersions=2,compressedExtension=".zip"):
         self.verbose = verbose
         self.credentials = credentials
+        self.maxVersions = maxVersions
+        # The following lines stabilish that the file versions will be saved in the format: file_[version num].zip
+        self.versionSeparator="_"
+        self.compressedExtension = compressedExtension
 
     def _getConnection(self):
         return swiftclient.Connection(key=self.credentials['password'],
@@ -806,16 +708,77 @@ class ObjectStorageManager:
                                                     "user_id": self.credentials['userId'],
                                                     "region_name": self.credentials['region']})
 
-    def backupFile(self,filePath,storageContainer,storageFileName):
+    def backupFile(self,filePath,storageContainer,baseFileName):
+
+        storageFileName = self._getVersionedNameForBackup(storageContainer = storageContainer,
+                                                          baseFileName = baseFileName)
+
+
         self._tryUntilSucced(function = lambda: self._backupFile(filePath,storageContainer, storageFileName))
 
+    # Returns the match of the regex indication if the fileName is a version of the baseFileName
+    # Matches the file version number in group(2)
+    def _matchFileVersion(self, baseFileName, fileName):
+        pattern = "%s(%s(\d+))?%s"%(baseFileName,self.versionSeparator,self.compressedExtension) #i.e. [basename]_1.zip
+        return re.match(pattern,fileName)
+
+    def _getFileBaseName(self,fileName):
+        pattern = "(.+)%s\d+%s$|(.+)%s$"%(self.versionSeparator,self.compressedExtension,self.compressedExtension)         
+        matches = re.match(pattern,fileName)
+        return matches.group(1) if matches.group(1) else matches.group(2)
+
+    def _getVersionedNameForBackup(self,storageContainer,baseFileName):
+        versions = self._getFileVersions(storageContainer,baseFileName)
+
+        def makeVersionName(name,versionNum):
+            return name+self.versionSeparator+str(versionNum)+self.compressedExtension
+
+        if len(versions) == 0:
+            return baseFileName
+
+        # If the max number of versions is not met yet, build another version
+        # The version name is generated like: file file_1 file _2
+        elif len(versions) < self.maxVersions:
+            return makeVersionName(baseFileName,len(versions))
+
+        # If we have the maximum amount of copies, override the oldest
+        else:
+            lastVersion = None
+
+            for version in versions:
+                
+                if not lastVersion:
+                    lastVersion = version
+                    continue
+
+                if parse(version["last_modified"]) < parse(lastVersion["last_modified"]):
+                    lastVersion = version
+
+            return lastVersion['name']
+
+    def _getFileVersions(self,storageContainer,baseFileName):
+        files = self._getFilesOfContainer(storageContainer)
+        if self.verbose:
+            print >> sys.stderr,"Getting %s file versions\n"%(baseFileName)
+
+        versions = [file for file in files if self._matchFileVersion(baseFileName,file['name'])]
+
+        if self.verbose:
+            print >> sys.stderr,"Found %s file versions"%(str(len(versions)))
+
+            for version in versions:
+                print >> sys.stderr , "\t - %s - %s"%(version['last_modified'],version['name'])
+
+            print >> sys.stderr,""  
+
+        return versions
+
     def _backupFile(self, filePath,storageContainer, storageFileName):
-        
         tempFolder = tempfile.mkdtemp()
     
         try:
             if self.verbose:
-                print "\nSending local file %s file to storage as %s\n"%(filePath,storageFileName)
+                print "Sending local file %s file to storage as %s\n"%(filePath,storageFileName)
 
             #TODO - Make it better
 
@@ -838,21 +801,38 @@ class ObjectStorageManager:
             self._getConnection().put_object(storageContainer,storageFileName,contents = compressedContents)
 
             if self.verbose:
-                print "\nFile %s compressed and sent successfully as %s\n"%(filePath,storageFileName)
+                print "File %s compressed and sent successfully as %s\n"%(filePath,storageFileName)
         finally:
             shutil.rmtree(tempFolder)
 
     def getFile(self,savePath,container,fileName):
-        content = self._tryUntilSucced(function = lambda: self._getFile(savePath, fileName,container))
+        content = self._tryUntilSucced(function = lambda: self._getFile(savePath, fileName, container))
 
     def _getFile(self,savePath,fileName,container):
         tempFolder = tempfile.mkdtemp()
+
         try:
             if self.verbose:
-                print >> sys.stderr , "\nGetting %s file from storage\n"%(fileName)
+                print >> sys.stderr , "Getting %s file from storage\n"%(fileName)
+
+            # Get the newest version of the file
+            versions = self._getFileVersions(container,fileName)
+            latestVersion = None
+            for version in versions:
+                if not latestVersion:
+                    latestVersion = version
+                    continue
+
+                elif parse(version["last_modified"]) > parse(latestVersion["last_modified"]):
+                    latestVersion = version
+            
+            if self.verbose:
+                print >> sys.stderr, "Latest version: %s - %s\n"%(latestVersion['last_modified'],latestVersion['name'])
+
+            lastVersionName = latestVersion['name']
 
             # Download an object and save it
-            content = self._getConnection().get_object(container, fileName)[1]
+            content = self._getConnection().get_object(container, lastVersionName)[1]
 
             # Write compressed contents in temporary file
             tempFilePath = os.path.join(tempFolder,"TemporaryCompressed")
@@ -865,11 +845,10 @@ class ObjectStorageManager:
                     file.write(uncompressedFile.read())
 
             if self.verbose:
-                print >> sys.stderr, "\nFile %s downloaded successfully, uncompressed and saved as %s\n" % (fileName,savePath)
+                print >> sys.stderr, "File %s downloaded successfully, uncompressed and saved as %s\n" % (fileName,savePath)
         
         finally:
             shutil.rmtree(tempFolder)
-
 
     def _tryUntilSucced(self, function):
         while True:
@@ -877,21 +856,33 @@ class ObjectStorageManager:
                 return function()
             except:
                 if self.verbose:
-                    print >> sys.stderr, "\nError in object storage operation\n"
-                    print >> sys.stderr, "\nTrying again\n"
+                    print >> sys.stderr, "Error in object storage operation\n"
+                    print >> sys.stderr, "Trying again\n"
                     print >> sys.stderr, traceback.format_exc()
                 time.sleep(10)
                 continue
 
-    def getFileNamesOfContainer(self,containerName):
-        return self._tryUntilSucced(function = lambda: self._getFileNamesOfContainer(containerName)) 
+    def getFilesOfContainer (self,containerName):
+        return self._tryUntilSucced(function = lambda: self._getFilesOfContainer(containerName))
 
-    def _getFileNamesOfContainer(self,containerName):
+    def _getFilesOfContainer (self, containerName):
         if self.verbose:
-            print >> sys.stderr, "\nGetting file names from container %s\n"%(containerName)
-
+            print >> sys.stderr, "Getting files from container %s\n"%(containerName)
         connection = self._getConnection()
-        return  [file['name'] for file in connection.get_container(containerName)[1]]
+        return connection.get_container(containerName)[1]
+
+    def getFileNamesOfContainer(self,containerName):
+        files = self.getFilesOfContainer(containerName)
+        fileNames = [file['name'] for file in files]
+        #Get Base names
+        filesBaseNames = []
+        
+        for fileName in fileNames:
+            baseFileName = self._getFileBaseName(fileName)
+            if baseFileName not in filesBaseNames:
+                filesBaseNames.append(baseFileName)
+
+        return filesBaseNames
 
 if __name__=="__main__":
     try:
