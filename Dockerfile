@@ -33,10 +33,10 @@ RUN pip install python-dateutil
 RUN mkdir repositories
 
 # Not made by git clone
-ADD dep_search/ repositories/dep_search/
+ADD src/ repositories/
 
 CMD cd repositories/ \
-    # &&git clone https://github.com/DanielSpecht/dep_search.git \
+    && mv src dep_search \
     &&cd dep_search/ \
     && make \
     &&cd webapi/ \
