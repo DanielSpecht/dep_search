@@ -28,6 +28,7 @@ RUN pip install pyyaml
 RUN pip install requests
 RUN pip install python-keystoneclient
 RUN pip install python-swiftclient
+RUN pip install python-dateutil
 
 RUN mkdir repositories
 
