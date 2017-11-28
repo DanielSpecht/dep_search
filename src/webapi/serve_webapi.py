@@ -892,7 +892,7 @@ if __name__=="__main__":
         manager = ObjectStorageManager(credentials,True)
 
         global dbManager
-        dbManager = DatabaseBackupManager(volumeDir=VOLUME_PATH,objectStoragecredentials=credentials, verbose=True,backupCheckTime = 15 )
+        dbManager = DatabaseBackupManager(volumeDir=VOLUME_PATH,objectStoragecredentials=credentials, verbose=True,backupCheckTime = 15*60)
         dbManager.startUp()
 
         # fileName = "testfile.txt"
