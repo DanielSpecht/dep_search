@@ -70,8 +70,8 @@ DB_FILE = "bosque_db/trees_00001.db"
 DB_CONLLU_FILE="bosque_db/bosque.conllu"
 ABSOLUTE_RETMAX=100000
 MAXCONTEXT=10
-VOLUME_PATH = "/home/daniel/Documentos/testes/Docker_v2/dep_search/dep_search/webapi/bosque_db"
-#VOLUME_PATH = "/data/bosque-db"
+#VOLUME_PATH = "/home/daniel/Documentos/testes/Docker_v2/dep_search/dep_search/webapi/bosque_db"
+VOLUME_PATH = "/data/bosque-db"
 
 @app.route("/metadata",methods=["GET"],strict_slashes=False)
 def get_metadata():
