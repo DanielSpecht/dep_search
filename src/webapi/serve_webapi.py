@@ -138,20 +138,20 @@ def update_sentence():
     temporary_file = tempfile.NamedTemporaryFile(mode="w+b", suffix=".conllu", prefix="tmp",delete=False)
 
     try:
-        # # password
-        # if "password" not in flask.request.form:
-        #     raise Exception("No password recieved")
+        # password
+        if "password" not in flask.request.form:
+            raise Exception("No password recieved")
 
-        # password = urllib.unquote(flask.request.form["password"]).encode('latin1').decode('utf8')
-        # hashedPassword = hashPassword(password)
+        password = urllib.unquote(flask.request.form["password"]).encode('latin1').decode('utf8')
+        hashedPassword = hashPassword(password)
 
-        # # username
-        # if "username" not in flask.request.form:
-        #     raise Exception("No user recieved")
+        # username
+        if "username" not in flask.request.form:
+            raise Exception("No user recieved")
 
-        # username = urllib.unquote(flask.request.form["username"]).encode('latin1').decode('utf8')
+        username = urllib.unquote(flask.request.form["username"]).encode('latin1').decode('utf8')
 
-        # # auth user...
+        # auth user...
         authenticate(username,password)
 
         # sent_id
