@@ -152,7 +152,7 @@ def update_sentence():
         # username = urllib.unquote(flask.request.form["username"]).encode('latin1').decode('utf8')
 
         # # auth user...
-        # authenticate(username,password)
+        authenticate(username,password)
 
         # sent_id
         if "sent_id" not in flask.request.form:
